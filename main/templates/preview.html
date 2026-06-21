@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Предпросмотр — DataLake{% endblock title %}
+{% block content %}
+<div class="card bg-light text-dark shadow">
+    <div class="card-body p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h3 class="mb-0">Предпросмотр данных</h3>
+                <p class="text-muted small mb-0">
+                    Загружено: {{ dataset.timestamp }} · Файл: {{ dataset.path.name }}
+                    {% if total_rows %}· Строк всего: {{ total_rows }}{% endif %}
+                </p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{% url 'graph' timestamp %}" class="btn btn-sm btn-outline-primary">График</a>
+                <a href="{% url 'export_csv' timestamp %}" class="btn btn-sm btn-outline-success">Экспорт CSV</a>
+                <a href="{% url 'admin:main_data_changelist' %}" class="btn btn-sm btn-outline-secondary">Назад</a>
+            </div>
+        </div>
+
+        {% if columns %}
+            <p class="text-muted small">Отображается первые {{ preview_limit }} строк из {{ total_rows }}.</p>
+            <div class="table-responsive" style="max-height: 70vh;">
+                <table class="table table-sm table-bordered table-hover table-striped align-middle">
+                    <thead class="table-dark sticky-top">
+                        <tr>
+                            {% for col in columns %}
+                                <th>{{ col }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                            <tr>
+                                {% for cell in row %}
+                                    <td>{{ cell }}</td>
+                                {% endfor %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="alert alert-warning">Данные не найдены или файл отсутствует.</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock content %}

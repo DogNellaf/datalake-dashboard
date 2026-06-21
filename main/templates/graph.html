@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Анализ данных — DataLake{% endblock title %}
+{% block content %}
+<div class="card bg-light text-dark shadow">
+    <div class="card-body p-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h3 class="mb-0">Анализ данных</h3>
+            <div>
+                <a href="{% url 'preview' timestamp %}" class="btn btn-sm btn-outline-secondary me-2">Предпросмотр</a>
+                <a href="{% url 'export_csv' timestamp %}" class="btn btn-sm btn-outline-success">Экспорт CSV</a>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-3 mb-4">
+                <h5>Доступные столбцы</h5>
+                <div id="columns" class="d-flex flex-wrap gap-2">
+                    {% for column in columns %}
+                        <div class="column badge bg-secondary fs-6 px-3 py-2" data-column="{{ column }}" style="cursor: move;">{{ column }}</div>
+                    {% empty %}
+                        <p class="text-muted small">Столбцы не найдены</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="col-lg-9">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h5>Ось X</h5>
+                        <div id="x-axis" class="axis-zone border border-2 border-dashed rounded p-3 text-muted small">
+                            Перетащите столбец сюда
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h5>Ось Y</h5>
+                        <div id="y-axis" class="axis-zone border border-2 border-dashed rounded p-3 text-muted small">
+                            Перетащите столбец сюда
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Тип графика</label>
+                    <select id="chart-type" class="form-select form-select-sm w-auto">
+                        <option value="scatter">Точечный</option>
+                        <option value="bar">Столбчатый</option>
+                        <option value="line">Линейный</option>
+                    </select>
+                </div>
+
+                <button id="plot-button" class="btn btn-primary mb-3">Построить график</button>
+                <div id="graph-error" class="alert alert-danger d-none"></div>
+                <div id="graph"></div>
+
+                <div id="stats-panel" class="mt-4 d-none">
+                    <h6>Статистика по столбцу Y</h6>
+                    <table class="table table-sm table-bordered bg-white">
+                        <tbody id="stats-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"
+        integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+<script src="https://code.jquery.com/ui/1.13.3/jquery-ui.min.js"
+        integrity="sha256-sw0iNNXmOJbQhYFuC9OF2kOlD5KQKe1y5lfBn4C9Sjk=" crossorigin="anonymous"></script>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script>
+    const TIMESTAMP = '{{ timestamp }}';
+    const PLOT_URL = '{% url "get_plot_data" %}';
+    const STATS_URL = '{% url "get_column_stats" %}';
+    const CSRF_TOKEN = '{{ csrf_token }}';
+
+    $(function () {
+        $(".column").draggable({ helper: "clone", zIndex: 100 });
+
+        $(".axis-zone").droppable({
+            accept: ".column",
+            hoverClass: "border-primary",
+            drop: function (event, ui) {
+                const clone = ui.helper.clone().draggable({ helper: "original" });
+                $(this).empty().removeClass("text-muted small").append(clone);
+                $(this).data("column", ui.helper.data("column"));
+            }
+        });
+
+        $("#plot-button").on("click", function () {
+            const xColumn = $("#x-axis").data("column");
+            const yColumn = $("#y-axis").data("column");
+            const chartType = $("#chart-type").val();
+
+            if (!xColumn || !yColumn) {
+                showError("Пожалуйста, выберите столбцы для обеих осей.");
+                return;
+            }
+            hideError();
+
+            $.ajax({
+                url: PLOT_URL,
+                method: "POST",
+                data: {
+                    x_column: xColumn,
+                    y_column: yColumn,
+                    timestamp: TIMESTAMP,
+                    csrfmiddlewaretoken: CSRF_TOKEN,
+                },
+                success: function (response) {
+                    const trace = {
+                        x: response.x_data,
+                        y: response.y_data,
+                        type: chartType,
+                        mode: chartType === "scatter" ? "markers" : undefined,
+                        marker: { color: "#0d6efd" },
+                    };
+                    Plotly.newPlot("graph", [trace], {
+                        xaxis: { title: xColumn },
+                        yaxis: { title: yColumn },
+                        margin: { t: 20 },
+                    });
+
+                    loadStats(yColumn);
+                },
+                error: function (xhr) {
+                    const msg = xhr.responseJSON ? xhr.responseJSON.error : "Ошибка загрузки данных.";
+                    showError(msg);
+                },
+            });
+        });
+
+        function loadStats(column) {
+            $.ajax({
+                url: STATS_URL,
+                method: "POST",
+                data: { column: column, timestamp: TIMESTAMP, csrfmiddlewaretoken: CSRF_TOKEN },
+                success: function (stats) {
+                    const labels = {
+                        count: "Кол-во значений",
+                        null_count: "Пропуски",
+                        unique_count: "Уникальных",
+                        min: "Минимум",
+                        max: "Максимум",
+                        mean: "Среднее",
+                        std: "Стд. отклонение",
+                    };
+                    let rows = "";
+                    for (const [key, label] of Object.entries(labels)) {
+                        if (key in stats) {
+                            const val = typeof stats[key] === "number" && !Number.isInteger(stats[key])
+                                ? stats[key].toFixed(4)
+                                : stats[key];
+                            rows += `<tr><td class="fw-semibold">${label}</td><td>${val}</td></tr>`;
+                        }
+                    }
+                    $("#stats-body").html(rows);
+                    $("#stats-panel").removeClass("d-none");
+                },
+            });
+        }
+
+        function showError(msg) {
+            $("#graph-error").text(msg).removeClass("d-none");
+        }
+
+        function hideError() {
+            $("#graph-error").addClass("d-none");
+        }
+    });
+</script>
+{% endblock content %}

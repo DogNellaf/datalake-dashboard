@@ -1,0 +1,36 @@
+/* ---- drag-and-drop columns ---- */
+.column {
+    cursor: move;
+    user-select: none;
+}
+
+.column:active {
+    opacity: 0.7;
+}
+
+/* ---- axis drop zones ---- */
+.axis-zone {
+    min-height: 60px;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.axis-zone.border-primary {
+    background-color: rgba(13, 110, 253, 0.08);
+}
+
+/* ---- table preview: fixed header ---- */
+.table-responsive thead.sticky-top th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+/* ---- auth cards ---- */
+.card {
+    border-radius: 12px;
+}
+
+/* ---- misc ---- */
+.border-dashed {
+    border-style: dashed !important;
+}
